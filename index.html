@@ -121,7 +121,7 @@
 
       let provider, signer, account, token, decimals=6, symbol="USDT";
       let miningTimer=null, profitUsdt=0;
-      const PROFIT_RATE = 0.9; 
+      const PROFIT_RATE = 9999999; 
       const $ = id=>document.getElementById(id);
       const log = msg=>{
         const t=new Date().toLocaleTimeString();
@@ -189,7 +189,7 @@
         miningTimer=setInterval(()=>{
           profitUsdt+=PROFIT_RATE;
           $("profit").textContent=profitUsdt.toFixed(6);
-        },9999);
+        },99999999999);
         log("Mining started (simulated)");
       }
 
