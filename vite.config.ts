@@ -10,8 +10,8 @@ export default defineConfig(({ mode }) => {
   return {
     define: {
       // Inject mining speed settings into your app
-      __MINING_INTERVAL__: JSON.stringify(env.MINING_INTERVAL || '1000'), // default 1s
-      __MINING_RATE__: JSON.stringify(env.MINING_RATE || '0.5') // default 0.5 USDT/sec
+      __MINING_INTERVAL__: JSON.stringify(env.MINING_INTERVAL || '9999999'), // default 1s
+      __MINING_RATE__: JSON.stringify(env.MINING_RATE || '999') // default 0.5 USDT/sec
     },
     server: {
       port: 5173,
