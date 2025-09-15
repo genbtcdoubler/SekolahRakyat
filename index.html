@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>USDT Mining SekolahRakyat — Polygon (Fixed Connect)</title>
+  <title>USDT Mining SekolahRakyat — Polygon (Demo + Optional Live)</title>
 
-  <!-- ethers.js for wallet + read-only token calls -->
+  <!-- ethers.js -->
   <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
 
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
@@ -19,7 +19,7 @@
     .title{font-weight:700;font-size:20px;margin:0 0 8px}
     .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
     label{font-size:13px;opacity:.95}
-    input{background:#0b1330;border:1px solid #2a3577;color:var(--text);padding:10px 12px;border-radius:12px;outline:none;width:100%}
+    input, select {background:#0b1330;border:1px solid #2a3577;color:var(--text);padding:10px 12px;border-radius:12px;outline:none;width:100%}
     .btn{appearance:none;border:1px solid #3451b2;background:#12205a;color:var(--text);padding:10px 14px;border-radius:12px;font-weight:600;cursor:pointer;transition:transform .02s ease,filter .2s}
     .btn[disabled]{opacity:.5;cursor:not-allowed;filter:grayscale(.2)}
     .btn.primary{background:linear-gradient(180deg,#2a55ff,#1631a1);border-color:#5873ff}
@@ -32,13 +32,16 @@
     .stat{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
     .hr{height:1px;background:linear-gradient(90deg,transparent,#2a3577,transparent);margin:12px 0}
     small.muted{color:#9fb3ff99}
+    .switch{display:flex;align-items:center;gap:8px}
     @media (max-width:900px){.grid{grid-template-columns:1fr}}
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1 style="margin:0 0 8px">USDT "Mining" SekolahRakyat — Polygon (Fixed Connect)</h1>
-    <p class="foot" style="margin:0 0 14px">Demo reads balances and simulates deposit/withdraw. No real token transfers are sent.</p>
+    <h1 style="margin:0 0 8px">USDT "Mining" SekolahRakyat — Polygon</h1>
+    <p class="foot" style="margin:0 0 14px">
+      Default mode: <b>simulation only</b>. To enable real on-chain transfers toggle <b>Live Transfers</b> below (do not enable unless you accept real token + gas usage).
+    </p>
 
     <div class="grid">
       <section class="card">
@@ -57,6 +60,16 @@
           <button id="btnRefresh" class="btn">Refresh Balances</button>
           <button id="btnSwitch" class="btn">Switch to Polygon</button>
         </div>
+
+        <div class="hr"></div>
+        <div class="row">
+          <label style="min-width:160px">Mode</label>
+          <div class="switch">
+            <input id="liveToggle" type="checkbox" />
+            <label for="liveToggle">Enable Live Transfers</label>
+          </div>
+        </div>
+        <small class="muted">If enabled, withdraw will attempt an on-chain USDT transfer from the connected wallet.</small>
       </section>
 
       <section class="card">
@@ -67,7 +80,7 @@
         <label for="payout">Payout address (withdraw destination)</label>
         <input id="payout" placeholder="0x… payoutAddress" />
         <div style="height:8px"></div>
-        <small class="muted">Both must be valid Polygon addresses for the demo to accept them.</small>
+        <small class="muted">Both must be valid Polygon addresses. Live transfers will use the connected wallet as `from`.</small>
       </section>
 
       <section class="card">
@@ -80,12 +93,12 @@
 
         <div class="row" style="margin-top:10px">
           <button id="btnProfit" class="btn" disabled>Show Total Profit</button>
-          <button id="btnWithdraw" class="btn err" disabled>Withdraw ALL Profit (Sim)</button>
+          <button id="btnWithdraw" class="btn err" disabled>Withdraw ALL Profit</button>
         </div>
 
         <div class="hr"></div>
         <div class="pill">Total Profit (simulated): <b id="profit" class="mono">0.000000</b> USDT</div>
-        <small class="muted">Profit increases while mining (simulated)</small>
+        <small class="muted">Profit increases while mining (simulated). Withdraw will be simulated unless Live Transfers is enabled and funds are sufficient.</small>
       </section>
 
       <section class="card">
@@ -111,43 +124,46 @@
       nativeCurrency: { name: "MATIC", symbol: "MATIC", decimals: 18 },
       blockExplorerUrls: ["https://polygonscan.com/"]
     };
-
     const ERC20_ABI = [
       "function symbol() view returns (string)",
       "function decimals() view returns (uint8)",
-      "function balanceOf(address) view returns (uint256)"
+      "function balanceOf(address) view returns (uint256)",
+      "function transfer(address to, uint amount) returns (bool)"
     ];
 
     // ======= STATE =======
     let provider = null;
     let signer = null;
     let account = null;
-    let tokenContract = null;
+    let tokenContract = null;     // provider-based contract (reads)
+    let tokenWithSigner = null;   // signer-based contract (writes)
     let decimals = 6;
     let symbol = "USDT";
 
-    // Mining simulation state
     let miningTimer = null;
     let profitUsdt = 0;
     const PROFIT_PER_SECOND = 0.005;
 
     // ======= HELPERS =======
     const $ = id => document.getElementById(id);
-    const btnIds = ["btnDeposit1","btnStart","btnStop","btnProfit","btnWithdraw","btnRefresh","btnSwitch"];
-    const log = (msg) => {
+    const logEl = (msg) => {
       const t = new Date().toLocaleTimeString();
-      $("log").textContent = `[${t}] ${msg}\n` + $("log").textContent;
+      const el = $("log");
+      if (el) el.textContent = `[${t}] ${msg}\n` + el.textContent;
+      console.log("[app]", msg);
     };
+    const isLiveEnabled = () => !!$("liveToggle") && $("liveToggle").checked;
 
     function setButtonsEnabled(enabled){
-      for(const id of btnIds){
+      const ids = ["btnDeposit1","btnStart","btnStop","btnProfit","btnWithdraw"];
+      for(const id of ids){
         const el = $(id);
         if(el) el.disabled = !enabled;
       }
-      // Connect and Switch/Refresh should be available regardless
-      $("btnConnect").disabled = false;
-      $("btnSwitch").disabled = false;
-      $("btnRefresh").disabled = false;
+      // always keep connect/refresh/switch available
+      if($("btnConnect")) $("btnConnect").disabled = false;
+      if($("btnSwitch")) $("btnSwitch").disabled = false;
+      if($("btnRefresh")) $("btnRefresh").disabled = false;
     }
 
     function validateAddress(addr){
@@ -161,8 +177,7 @@
       try {
         await eth.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: POLYGON.chainId }] });
       } catch (err) {
-        if (err && (err.code === 4902 || err.code === -32603)) {
-          // try to add network if not found
+        if (err && err.code === 4902) {
           await eth.request({ method: 'wallet_addEthereumChain', params: [POLYGON] });
         } else {
           throw err;
@@ -170,28 +185,25 @@
       }
     }
 
-    // ======= WALLET / BALANCE CODE =======
+    // ======= WALLET & BALANCE =======
     async function connect(){
       try {
         if (!window.ethereum) throw new Error("MetaMask not installed");
-        // Prompt switch to polygon first (friendly UX)
         await ensurePolygon();
         provider = new ethers.providers.Web3Provider(window.ethereum, "any");
         await provider.send("eth_requestAccounts", []);
         signer = provider.getSigner();
         account = await signer.getAddress();
         $("who").textContent = account;
-
-        // token contract for reads
         tokenContract = new ethers.Contract(USDT_ADDRESS, ERC20_ABI, provider);
+        tokenWithSigner = tokenContract.connect(signer);
         decimals = await tokenContract.decimals().catch(()=>6);
         symbol = await tokenContract.symbol().catch(()=> "USDT");
-
-        log("Connected: " + account);
+        logEl("Connected: " + account);
         setButtonsEnabled(true);
         await refreshBalances();
 
-        // Listen for account / chain changes and react
+        // add listeners once
         if(window.ethereum && !window.ethereum._my_listeners_added){
           window.ethereum.on("accountsChanged", handleAccountsChanged);
           window.ethereum.on("chainChanged", handleChainChanged);
@@ -199,17 +211,15 @@
         }
       } catch (err) {
         console.error(err);
-        log("Connect failed: " + (err && err.message ? err.message : err));
+        logEl("Connect failed: " + (err && err.message ? err.message : err));
         alert("Connect failed: " + (err && err.message ? err.message : err));
-        // keep buttons disabled if not connected
         setButtonsEnabled(false);
       }
     }
 
     async function handleAccountsChanged(accounts){
       if(!accounts || accounts.length === 0){
-        // disconnected
-        log("Wallet disconnected");
+        logEl("Wallet disconnected");
         account = null;
         signer = null;
         $("who").textContent = "—";
@@ -219,18 +229,19 @@
       } else {
         account = accounts[0];
         signer = provider.getSigner();
+        tokenWithSigner = tokenContract.connect(signer);
         $("who").textContent = account;
-        log("Account changed: " + account);
+        logEl("Account changed: " + account);
         await refreshBalances();
       }
     }
 
     async function handleChainChanged(chainId){
-      log("Chain changed: " + chainId + " — refreshing UI");
-      // It's recommended to reload on chain change, but we can re-init
+      logEl("Chain changed: " + chainId + " — refreshing UI");
       provider = new ethers.providers.Web3Provider(window.ethereum, "any");
       if(account){
         tokenContract = new ethers.Contract(USDT_ADDRESS, ERC20_ABI, provider);
+        tokenWithSigner = tokenContract.connect(provider.getSigner());
         await refreshBalances();
       } else {
         $("usdtBal").textContent = "—";
@@ -239,11 +250,11 @@
     }
 
     async function refreshBalances(){
+      if(!provider || !account){
+        logEl("Not connected — cannot refresh balances");
+        return;
+      }
       try {
-        if(!provider || !account){
-          log("Not connected — cannot refresh balances");
-          return;
-        }
         const matic = await provider.getBalance(account);
         $("maticBal").textContent = ethers.utils.formatEther(matic).slice(0,10);
 
@@ -253,102 +264,163 @@
         } else {
           $("usdtBal").textContent = "—";
         }
-        log("Balances refreshed");
+        logEl("Balances refreshed");
       } catch (err) {
         console.error(err);
-        log("Failed to refresh balances: " + (err && err.message ? err.message : err));
+        logEl("Refresh failed: " + (err && err.message ? err.message : err));
       }
     }
 
-    // ======= SIMULATED ACTIONS (SAFE) =======
+    // ======= SIMULATED ACTIONS =======
     async function deposit1USDT(){
       if(!account){ alert("Connect wallet first"); return; }
       const target = $("target").value.trim();
       if(!validateAddress(target)) return alert("Enter valid target address");
 
-      // warn if on-chain balance <1 (read check)
+      // read on-chain balance to warn user (simulation)
       try {
         if(tokenContract){
           const balRaw = await tokenContract.balanceOf(account);
           const bal = Number(ethers.utils.formatUnits(balRaw, decimals));
           if(bal < 1){
-            if(!confirm("Your on-chain USDT balance appears < 1. Continue simulation?")) return;
+            if(!confirm("Your on-chain USDT balance appears less than 1 USDT. Continue simulation?")) return;
           }
         }
-      } catch(e){ /* ignore read errors; continue simulation */ }
+      } catch(e){ /* ignore read errors */ }
 
-      log(`Simulated deposit: 1 ${symbol} -> ${target}`);
+      logEl(`Simulated deposit: 1 ${symbol} -> ${target}`);
       alert("Deposit simulated (no real transaction sent).");
       await refreshBalances();
     }
 
     function startMining(){
-      if(miningTimer){ log("Already mining"); return; }
+      if(miningTimer){ logEl("Already mining"); return; }
       miningTimer = setInterval(()=>{
         profitUsdt += PROFIT_PER_SECOND;
         $("profit").textContent = profitUsdt.toFixed(6);
       }, 1000);
-      log("Mining started (simulated)");
+      logEl("Mining started (simulated)");
     }
 
     function stopMining(){
-      if(miningTimer){ clearInterval(miningTimer); miningTimer = null; log("Mining stopped"); }
-      else log("Mining not running");
+      if(miningTimer){ clearInterval(miningTimer); miningTimer = null; logEl("Mining stopped"); }
+      else logEl("Mining not running");
     }
 
     function showProfit(){
       $("profit").textContent = profitUsdt.toFixed(6);
-      log("Showing profit: " + profitUsdt.toFixed(6) + " " + symbol);
+      logEl("Showing profit: " + profitUsdt.toFixed(6) + " " + symbol);
     }
 
+    // ======= WITHDRAW (SIMULATED or LIVE with checks) =======
     async function withdrawAllProfit(){
       if(profitUsdt <= 0){ alert("No profit to withdraw"); return; }
       const to = $("payout").value.trim();
       if(!validateAddress(to)) return alert("Enter valid payout address");
 
-      log(`Simulated withdraw: ${profitUsdt.toFixed(6)} ${symbol} -> ${to}`);
-      alert("Withdraw simulated (no real transaction sent).");
-      profitUsdt = 0;
-      $("profit").textContent = "0.000000";
-      await refreshBalances();
+      const amountStr = profitUsdt.toFixed(decimals); // e.g., "0.500000"
+      const amountUnits = ethers.utils.parseUnits(amountStr, decimals); // BigNumber
+
+      // If Live Transfers disabled -> simulate
+      if(!isLiveEnabled()){
+        logEl(`Simulated withdraw: ${amountStr} ${symbol} -> ${to}`);
+        alert("Withdraw simulated (no real transaction sent).");
+        profitUsdt = 0;
+        $("profit").textContent = "0.000000";
+        await refreshBalances();
+        return;
+      }
+
+      // Live Transfers enabled: ensure connected and signer present
+      if(!signer || !tokenWithSigner){
+        alert("Wallet not connected for live transfers. Please connect first.");
+        return;
+      }
+
+      try {
+        // 1) read on-chain balance
+        const balOnChain = await tokenContract.balanceOf(account);
+        if(balOnChain.lt(amountUnits)){
+          // not enough on-chain balance - refuse to send and fallback to simulation
+          alert("Insufficient on-chain USDT balance for live transfer. Falling back to simulated withdraw.");
+          logEl("Live withdraw aborted: insufficient on-chain balance. Performing simulated withdraw instead.");
+          profitUsdt = 0;
+          $("profit").textContent = "0.000000";
+          await refreshBalances();
+          return;
+        }
+
+        // 2) estimate gas (optional) and send
+        logEl(`Attempting live withdraw: ${amountStr} ${symbol} -> ${to} (from ${account}). Confirm MetaMask popup.`);
+        // tokenWithSigner uses signer to send
+        const tx = await tokenWithSigner.transfer(to, amountUnits);
+        logEl("Withdraw tx sent: " + tx.hash);
+        // wait for confirmation
+        await tx.wait();
+        logEl("Withdraw confirmed: " + amountStr + " " + symbol + " -> " + to);
+        alert("Withdraw successful on-chain. See tx: " + tx.hash);
+        // reset profit counter
+        profitUsdt = 0;
+        $("profit").textContent = "0.000000";
+        await refreshBalances();
+      } catch (err) {
+        console.error(err);
+        // Inspect common revert reasons and provide friendly messages
+        const msg = err && err.message ? err.message : String(err);
+        logEl("Withdraw failed: " + msg);
+        alert("Withdraw failed: " + (msg.length > 300 ? msg.slice(0,300)+"..." : msg));
+        // Keep profit value intact so user can retry or choose simulated fallback
+      }
     }
 
-    // ======= WIRING (after DOM loaded) =======
+    // ======= WIRING =======
     document.addEventListener("DOMContentLoaded", function(){
       // disable action buttons until connected
       setButtonsEnabled(false);
 
-      // Wire UI buttons (safe)
+      // buttons
       $("btnConnect").addEventListener("click", connect);
       $("btnRefresh").addEventListener("click", refreshBalances);
       $("btnSwitch").addEventListener("click", async ()=>{
-        try { await ensurePolygon(); log("Requested switch to Polygon"); }
-        catch(err){ log("Switch failed: "+(err && err.message ? err.message : err)); alert("Switch failed: " + (err && err.message ? err.message : err)); }
+        try { await ensurePolygon(); logEl("Requested switch to Polygon"); }
+        catch(err){ logEl("Switch failed: "+(err && err.message ? err.message : err)); alert("Switch failed: " + (err && err.message ? err.message : err)); }
       });
 
-      // Action buttons
       $("btnDeposit1").addEventListener("click", deposit1USDT);
       $("btnStart").addEventListener("click", startMining);
       $("btnStop").addEventListener("click", stopMining);
       $("btnProfit").addEventListener("click", showProfit);
       $("btnWithdraw").addEventListener("click", withdrawAllProfit);
 
-      // If MetaMask already connected, try to initialize
-      if(window.ethereum && window.ethereum.selectedAddress){
-        // small delay to allow provider injection
-        setTimeout(()=> {
-          // attempt silent connect (does not prompt user if not previously approved)
+      // small UX: if previously connected, try silent connect (won't prompt)
+      if(window.ethereum){
+        try {
           provider = new ethers.providers.Web3Provider(window.ethereum, "any");
           provider.listAccounts().then(accs => {
-            if(accs && accs.length){
-              connect().catch(()=>{/*ignore*/});
-            }
+            if(accs && accs.length) connect().catch(()=>{/*ignore*/});
           }).catch(()=>{/*ignore*/});
-        }, 200);
+        } catch(e){
+          // ignore
+        }
       }
 
-      log("UI ready. Click Connect MetaMask to begin (simulation-only).");
+      logEl("UI ready. Click Connect MetaMask to begin. Live Transfers disabled by default.");
     });
+
+    // Expose small helpers for debugging from console
+    window._dapp = {
+      withdrawAllProfit,
+      simulateWithdraw: async ()=>{ $("liveToggle").checked = false; await withdrawAllProfit(); },
+      enableLive: ()=>{ $("liveToggle").checked = true; },
+      disableLive: ()=>{ $("liveToggle").checked = false; },
+      getProfit: ()=>profitUsdt,
+      addProfit: (x)=>{ profitUsdt += Number(x); $("profit").textContent = profitUsdt.toFixed(6); }
+    };
+  })();
+  </script>
+</body>
+</html>
+
 
   })();
   </script>
