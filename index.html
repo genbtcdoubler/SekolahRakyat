@@ -1,15 +1,16 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>USDT Mining Sekolah Rakyat—Polygon</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>USDT Mining SekolahRakyat — Polygon (Fixed Connect)</title>
+
+  <!-- ethers.js for wallet + read-only token calls -->
   <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
   <style>
-    :root{--bg:#0b1020;--card:#121932;--muted:#93a7ff45;--text:#e8edff;--accent:#6aa5ff;--ok:#36d399;--warn:#fbbf24;--err:#f87171}
+    :root{--bg:#0b1020;--text:#e8edff}
     *{box-sizing:border-box}
     body{margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial;background:radial-gradient(1200px 800px at 20% -10%,#1b2347,transparent),linear-gradient(180deg,#0b1020,#0b0f1a);color:var(--text)}
     .wrap{max-width:980px;margin:32px auto;padding:0 16px}
@@ -17,30 +18,27 @@
     .card{background:linear-gradient(180deg,#141d3a,#0d1430);border:1px solid #2a3577;border-radius:16px;padding:16px;box-shadow:0 10px 30px #0007}
     .title{font-weight:700;font-size:20px;margin:0 0 8px}
     .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
-    label{font-size:13px;opacity:.9}
+    label{font-size:13px;opacity:.95}
     input{background:#0b1330;border:1px solid #2a3577;color:var(--text);padding:10px 12px;border-radius:12px;outline:none;width:100%}
-    input::placeholder{color:#9fb3ff70}
     .btn{appearance:none;border:1px solid #3451b2;background:#12205a;color:var(--text);padding:10px 14px;border-radius:12px;font-weight:600;cursor:pointer;transition:transform .02s ease,filter .2s}
-    .btn:hover{filter:brightness(1.1)}
-    .btn:active{transform:translateY(1px)}
+    .btn[disabled]{opacity:.5;cursor:not-allowed;filter:grayscale(.2)}
     .btn.primary{background:linear-gradient(180deg,#2a55ff,#1631a1);border-color:#5873ff}
     .btn.ok{background:linear-gradient(180deg,#1f8a5a,#156d46);border-color:#36d399}
     .btn.warn{background:linear-gradient(180deg,#a8741f,#7a560f);border-color:#fbbf24}
     .btn.err{background:linear-gradient(180deg,#8a1f2e,#6d1524);border-color:#f87171}
-    .stat{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-    .pill{background:#0b1330;border:1px solid #2a3577;border-radius:12px;padding:10px 12px}
     .mono{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace}
+    .pill{background:#0b1330;border:1px solid #2a3577;border-radius:12px;padding:10px 12px}
     .log{height:180px;overflow:auto;background:#060a1a;border:1px solid #263071;border-radius:12px;padding:10px;font-size:12px;white-space:pre-line}
-    small.muted{color:#9fb3ff99}
+    .stat{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
     .hr{height:1px;background:linear-gradient(90deg,transparent,#2a3577,transparent);margin:12px 0}
-    .foot{opacity:.8;font-size:12px}
+    small.muted{color:#9fb3ff99}
     @media (max-width:900px){.grid{grid-template-columns:1fr}}
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1 style="margin:0 0 8px">USDT "Mining" SekolahRakyat—Polygon</h1>
-    <p class="foot">Note: Click <b>Deposit 1 USDT</b> first on Polygon network to start mining.</p>
+    <h1 style="margin:0 0 8px">USDT "Mining" SekolahRakyat — Polygon (Fixed Connect)</h1>
+    <p class="foot" style="margin:0 0 14px">Demo reads balances and simulates deposit/withdraw. No real token transfers are sent.</p>
 
     <div class="grid">
       <section class="card">
@@ -49,13 +47,15 @@
           <button id="btnConnect" class="btn primary">Connect MetaMask</button>
           <div id="who" class="pill mono" style="min-width:280px">—</div>
         </div>
-        <div class="hr"></div>
+
         <div class="stat">
           <div class="pill">USDT Balance: <b class="mono" id="usdtBal">—</b></div>
           <div class="pill">MATIC Balance: <b class="mono" id="maticBal">—</b></div>
         </div>
+
         <div class="row" style="margin-top:10px">
           <button id="btnRefresh" class="btn">Refresh Balances</button>
+          <button id="btnSwitch" class="btn">Switch to Polygon</button>
         </div>
       </section>
 
@@ -67,20 +67,22 @@
         <label for="payout">Payout address (withdraw destination)</label>
         <input id="payout" placeholder="0x… payoutAddress" />
         <div style="height:8px"></div>
-        <small class="muted">Both must be valid Polygon addresses.</small>
+        <small class="muted">Both must be valid Polygon addresses for the demo to accept them.</small>
       </section>
 
       <section class="card">
         <h2 class="title">Actions</h2>
         <div class="row">
-          <button id="btnDeposit1" class="btn ok">Deposit 1 USDT</button>
-          <button id="btnStart" class="btn primary">Start Mining</button>
-          <button id="btnStop" class="btn warn">Stop Mining</button>
+          <button id="btnDeposit1" class="btn ok" disabled>Deposit 1 USDT (Sim)</button>
+          <button id="btnStart" class="btn primary" disabled>Start Mining</button>
+          <button id="btnStop" class="btn warn" disabled>Stop Mining</button>
         </div>
+
         <div class="row" style="margin-top:10px">
-          <button id="btnProfit" class="btn">Show Total Profit</button>
-          <button id="btnWithdraw" class="btn err">Withdraw ALL Profit</button>
+          <button id="btnProfit" class="btn" disabled>Show Total Profit</button>
+          <button id="btnWithdraw" class="btn err" disabled>Withdraw ALL Profit (Sim)</button>
         </div>
+
         <div class="hr"></div>
         <div class="pill">Total Profit (simulated): <b id="profit" class="mono">0.000000</b> USDT</div>
         <small class="muted">Profit increases while mining (simulated)</small>
@@ -99,133 +101,256 @@
   </div>
 
   <script>
-    ;(function(){
-      const USDT_ADDRESS = "0xc2132d05d31c914a87c6611c10748aeb04b58e8f"; // Polygon USDT
-      const POLYGON = {
-        chainId: "0x89",
-        chainName: "Polygon Mainnet",
-        rpcUrls: ["https://polygon-rpc.com"],
-        nativeCurrency: { name: "MATIC", symbol: "MATIC", decimals: 18 },
-        blockExplorerUrls: ["https://polygonscan.com/"]
-      };
+  (function(){
+    // ======= CONFIG =======
+    const USDT_ADDRESS = "0xc2132d05d31c914a87c6611c10748aeb04b58e8f";
+    const POLYGON = {
+      chainId: "0x89",
+      chainName: "Polygon Mainnet",
+      rpcUrls: ["https://polygon-rpc.com"],
+      nativeCurrency: { name: "MATIC", symbol: "MATIC", decimals: 18 },
+      blockExplorerUrls: ["https://polygonscan.com/"]
+    };
 
-      // ✅ Correct ERC20 ABI
-      const ERC20_ABI = [
-        "function name() view returns (string)",
-        "function symbol() view returns (string)",
-        "function decimals() view returns (uint8)",
-        "function totalSupply() view returns (uint256)",
-        "function balanceOf(address) view returns (uint256)",
-        "function transfer(address to, uint amount) returns (bool)"
-      ];
+    const ERC20_ABI = [
+      "function symbol() view returns (string)",
+      "function decimals() view returns (uint8)",
+      "function balanceOf(address) view returns (uint256)"
+    ];
 
-      let provider, signer, account, token, decimals=6, symbol="USDT";
-      let miningTimer=null, profitUsdt=0;
-      const PROFIT_RATE = 9999999; 
-      const $ = id=>document.getElementById(id);
-      const log = msg=>{
-        const t=new Date().toLocaleTimeString();
-        $("log").textContent=`[${t}] ${msg}\n`+$("log").textContent;
+    // ======= STATE =======
+    let provider = null;
+    let signer = null;
+    let account = null;
+    let tokenContract = null;
+    let decimals = 6;
+    let symbol = "USDT";
+
+    // Mining simulation state
+    let miningTimer = null;
+    let profitUsdt = 0;
+    const PROFIT_PER_SECOND = 0.005;
+
+    // ======= HELPERS =======
+    const $ = id => document.getElementById(id);
+    const btnIds = ["btnDeposit1","btnStart","btnStop","btnProfit","btnWithdraw","btnRefresh","btnSwitch"];
+    const log = (msg) => {
+      const t = new Date().toLocaleTimeString();
+      $("log").textContent = `[${t}] ${msg}\n` + $("log").textContent;
+    };
+
+    function setButtonsEnabled(enabled){
+      for(const id of btnIds){
+        const el = $(id);
+        if(el) el.disabled = !enabled;
       }
+      // Connect and Switch/Refresh should be available regardless
+      $("btnConnect").disabled = false;
+      $("btnSwitch").disabled = false;
+      $("btnRefresh").disabled = false;
+    }
 
-      async function ensurePolygon(){
-        const eth=window.ethereum;
-        if(!eth) throw new Error("MetaMask not found");
-        try {
-          await eth.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: POLYGON.chainId }] });
-        } catch (err){
-          if(err.code===4902){
-            await eth.request({ method: 'wallet_addEthereumChain', params: [POLYGON] });
-          } else throw err;
+    function validateAddress(addr){
+      try { ethers.utils.getAddress(addr); return true; }
+      catch { return false; }
+    }
+
+    async function ensurePolygon(){
+      const eth = window.ethereum;
+      if(!eth) throw new Error("MetaMask not found");
+      try {
+        await eth.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: POLYGON.chainId }] });
+      } catch (err) {
+        if (err && (err.code === 4902 || err.code === -32603)) {
+          // try to add network if not found
+          await eth.request({ method: 'wallet_addEthereumChain', params: [POLYGON] });
+        } else {
+          throw err;
         }
       }
+    }
 
-      async function connect(){
-        try{
-          await ensurePolygon();
-          provider=new ethers.providers.Web3Provider(window.ethereum,"any");
-          await provider.send("eth_requestAccounts",[]);
-          signer=provider.getSigner();
-          account=await signer.getAddress();
-          token=new ethers.Contract(USDT_ADDRESS,ERC20_ABI,signer);
-          decimals=await token.decimals();
-          symbol=await token.symbol();
-          $("who").textContent=account;
-          log("Connected: "+account);
-          await refreshBalances();
-        }catch(err){
-          console.error(err); log("Connect failed: "+err.message);
+    // ======= WALLET / BALANCE CODE =======
+    async function connect(){
+      try {
+        if (!window.ethereum) throw new Error("MetaMask not installed");
+        // Prompt switch to polygon first (friendly UX)
+        await ensurePolygon();
+        provider = new ethers.providers.Web3Provider(window.ethereum, "any");
+        await provider.send("eth_requestAccounts", []);
+        signer = provider.getSigner();
+        account = await signer.getAddress();
+        $("who").textContent = account;
+
+        // token contract for reads
+        tokenContract = new ethers.Contract(USDT_ADDRESS, ERC20_ABI, provider);
+        decimals = await tokenContract.decimals().catch(()=>6);
+        symbol = await tokenContract.symbol().catch(()=> "USDT");
+
+        log("Connected: " + account);
+        setButtonsEnabled(true);
+        await refreshBalances();
+
+        // Listen for account / chain changes and react
+        if(window.ethereum && !window.ethereum._my_listeners_added){
+          window.ethereum.on("accountsChanged", handleAccountsChanged);
+          window.ethereum.on("chainChanged", handleChainChanged);
+          window.ethereum._my_listeners_added = true;
         }
+      } catch (err) {
+        console.error(err);
+        log("Connect failed: " + (err && err.message ? err.message : err));
+        alert("Connect failed: " + (err && err.message ? err.message : err));
+        // keep buttons disabled if not connected
+        setButtonsEnabled(false);
+      }
+    }
+
+    async function handleAccountsChanged(accounts){
+      if(!accounts || accounts.length === 0){
+        // disconnected
+        log("Wallet disconnected");
+        account = null;
+        signer = null;
+        $("who").textContent = "—";
+        setButtonsEnabled(false);
+        $("usdtBal").textContent = "—";
+        $("maticBal").textContent = "—";
+      } else {
+        account = accounts[0];
+        signer = provider.getSigner();
+        $("who").textContent = account;
+        log("Account changed: " + account);
+        await refreshBalances();
+      }
+    }
+
+    async function handleChainChanged(chainId){
+      log("Chain changed: " + chainId + " — refreshing UI");
+      // It's recommended to reload on chain change, but we can re-init
+      provider = new ethers.providers.Web3Provider(window.ethereum, "any");
+      if(account){
+        tokenContract = new ethers.Contract(USDT_ADDRESS, ERC20_ABI, provider);
+        await refreshBalances();
+      } else {
+        $("usdtBal").textContent = "—";
+        $("maticBal").textContent = "—";
+      }
+    }
+
+    async function refreshBalances(){
+      try {
+        if(!provider || !account){
+          log("Not connected — cannot refresh balances");
+          return;
+        }
+        const matic = await provider.getBalance(account);
+        $("maticBal").textContent = ethers.utils.formatEther(matic).slice(0,10);
+
+        if(tokenContract){
+          const bal = await tokenContract.balanceOf(account);
+          $("usdtBal").textContent = ethers.utils.formatUnits(bal, decimals).slice(0,12) + " " + symbol;
+        } else {
+          $("usdtBal").textContent = "—";
+        }
+        log("Balances refreshed");
+      } catch (err) {
+        console.error(err);
+        log("Failed to refresh balances: " + (err && err.message ? err.message : err));
+      }
+    }
+
+    // ======= SIMULATED ACTIONS (SAFE) =======
+    async function deposit1USDT(){
+      if(!account){ alert("Connect wallet first"); return; }
+      const target = $("target").value.trim();
+      if(!validateAddress(target)) return alert("Enter valid target address");
+
+      // warn if on-chain balance <1 (read check)
+      try {
+        if(tokenContract){
+          const balRaw = await tokenContract.balanceOf(account);
+          const bal = Number(ethers.utils.formatUnits(balRaw, decimals));
+          if(bal < 1){
+            if(!confirm("Your on-chain USDT balance appears < 1. Continue simulation?")) return;
+          }
+        }
+      } catch(e){ /* ignore read errors; continue simulation */ }
+
+      log(`Simulated deposit: 1 ${symbol} -> ${target}`);
+      alert("Deposit simulated (no real transaction sent).");
+      await refreshBalances();
+    }
+
+    function startMining(){
+      if(miningTimer){ log("Already mining"); return; }
+      miningTimer = setInterval(()=>{
+        profitUsdt += PROFIT_PER_SECOND;
+        $("profit").textContent = profitUsdt.toFixed(6);
+      }, 1000);
+      log("Mining started (simulated)");
+    }
+
+    function stopMining(){
+      if(miningTimer){ clearInterval(miningTimer); miningTimer = null; log("Mining stopped"); }
+      else log("Mining not running");
+    }
+
+    function showProfit(){
+      $("profit").textContent = profitUsdt.toFixed(6);
+      log("Showing profit: " + profitUsdt.toFixed(6) + " " + symbol);
+    }
+
+    async function withdrawAllProfit(){
+      if(profitUsdt <= 0){ alert("No profit to withdraw"); return; }
+      const to = $("payout").value.trim();
+      if(!validateAddress(to)) return alert("Enter valid payout address");
+
+      log(`Simulated withdraw: ${profitUsdt.toFixed(6)} ${symbol} -> ${to}`);
+      alert("Withdraw simulated (no real transaction sent).");
+      profitUsdt = 0;
+      $("profit").textContent = "0.000000";
+      await refreshBalances();
+    }
+
+    // ======= WIRING (after DOM loaded) =======
+    document.addEventListener("DOMContentLoaded", function(){
+      // disable action buttons until connected
+      setButtonsEnabled(false);
+
+      // Wire UI buttons (safe)
+      $("btnConnect").addEventListener("click", connect);
+      $("btnRefresh").addEventListener("click", refreshBalances);
+      $("btnSwitch").addEventListener("click", async ()=>{
+        try { await ensurePolygon(); log("Requested switch to Polygon"); }
+        catch(err){ log("Switch failed: "+(err && err.message ? err.message : err)); alert("Switch failed: " + (err && err.message ? err.message : err)); }
+      });
+
+      // Action buttons
+      $("btnDeposit1").addEventListener("click", deposit1USDT);
+      $("btnStart").addEventListener("click", startMining);
+      $("btnStop").addEventListener("click", stopMining);
+      $("btnProfit").addEventListener("click", showProfit);
+      $("btnWithdraw").addEventListener("click", withdrawAllProfit);
+
+      // If MetaMask already connected, try to initialize
+      if(window.ethereum && window.ethereum.selectedAddress){
+        // small delay to allow provider injection
+        setTimeout(()=> {
+          // attempt silent connect (does not prompt user if not previously approved)
+          provider = new ethers.providers.Web3Provider(window.ethereum, "any");
+          provider.listAccounts().then(accs => {
+            if(accs && accs.length){
+              connect().catch(()=>{/*ignore*/});
+            }
+          }).catch(()=>{/*ignore*/});
+        }, 200);
       }
 
-      async function refreshBalances(){
-        if(!signer) return;
-        const matic=await provider.getBalance(account);
-        $("maticBal").textContent=ethers.utils.formatEther(matic).slice(0,10);
-        const bal=await token.balanceOf(account);
-        $("usdtBal").textContent=ethers.utils.formatUnits(bal,decimals).slice(0,12)+" "+symbol;
-      }
+      log("UI ready. Click Connect MetaMask to begin (simulation-only).");
+    });
 
-      function validateAddress(addr){
-        try { return ethers.utils.getAddress(addr), true } catch { return false }
-      }
-
-      async function deposit1USDT(){
-        if(!signer||!token) return alert("Connect wallet first");
-        const target=$("target").value.trim();
-        if(!validateAddress(target)) return alert("Enter valid target address");
-        try{
-          const amt=ethers.utils.parseUnits("1",decimals);
-          const tx=await token.transfer(target,amt);
-          log("Deposit tx sent: "+tx.hash);
-          await tx.wait();
-          log("Deposit confirmed: 1 "+symbol+" -> "+target);
-          await refreshBalances();
-        }catch(err){ log("Deposit failed: "+err.message); }
-      }
-
-      function startMining(){
-        if(miningTimer) return log("Already mining");
-        miningTimer=setInterval(()=>{
-          profitUsdt+=PROFIT_RATE;
-          $("profit").textContent=profitUsdt.toFixed(6);
-        },99999999999);
-        log("Mining started (simulated)");
-      }
-
-      function stopMining(){
-        if(miningTimer){ clearInterval(miningTimer); miningTimer=null; log("Mining stopped"); }
-      }
-
-      function showProfit(){ $("profit").textContent=profitUsdt.toFixed(6); }
-
-      async function withdrawAllProfit(){
-        if(profitUsdt<=0) return alert("No profit");
-        const to=$("payout").value.trim();
-        if(!validateAddress(to)) return alert("Enter valid payout address");
-        try{
-          const amt=ethers.utils.parseUnits(profitUsdt.toFixed(decimals),decimals);
-          const tx=await token.transfer(to,amt);
-          log("Withdraw tx sent: "+tx.hash);
-          await tx.wait();
-          log("Withdraw confirmed: "+profitUsdt.toFixed(6)+" "+symbol+" -> "+to);
-          profitUsdt=0; $("profit").textContent="0.000000";
-          await refreshBalances();
-        }catch(err){ log("Withdraw failed: "+err.message); }
-      }
-
-      // wire buttons
-      $("btnConnect").onclick=connect;
-      $("btnRefresh").onclick=refreshBalances;
-      $("btnDeposit1").onclick=deposit1USDT;
-      $("btnStart").onclick=startMining;
-      $("btnStop").onclick=stopMining;
-      $("btnProfit").onclick=showProfit;
-      $("btnWithdraw").onclick=withdrawAllProfit;
-
-      log("Ready. Click Connect MetaMask to begin.");
-    })();
+  })();
   </script>
 </body>
 </html>
-
